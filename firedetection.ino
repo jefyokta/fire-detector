@@ -11,7 +11,7 @@
 
 const char* ssid = ".";
 const char* wifipass = "aicomel06";
-const char* BOT_TOKEN = "7662051406:AAEJAIqBNEeC0WS4dB569fLiwsa_om4lNFI";
+const char* BOT_TOKEN = "";
 const char* ChannelID = "@fire_test10";
 const float VCC = 3.3;
 const String SecretKey = "rahasia";
