@@ -1,7 +1,7 @@
 #ifndef TEMPERATURE_H
 #define TEMPERATURE_H
-
-class Temperature {
+#include "Fuzzify.h"
+class Temperature : public Fuzzify {
 private:
   float temp;
 public:
@@ -12,5 +12,7 @@ public:
   bool isVeryHot();
   bool isNormal();
   float getTemperature();
+protected:
+  float getValue() override;
 };
 #endif

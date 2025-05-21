@@ -1,8 +1,8 @@
 #ifndef FIRE_H
 #define FIRE_H
+#include "Fuzzify.h"
 
-
-class Fire {
+class Fire : public Fuzzify {
 private:
   float voltage;
 public:
@@ -12,6 +12,8 @@ public:
   bool isUndetected();
   bool isVeryNear();
   float getVoltage();
+protected:
+  float getValue() override;
 };
 
 

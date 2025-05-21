@@ -1,8 +1,8 @@
 #ifndef GAS_H
 #define GAS_H
 #include <Arduino.h>
-
-class Gas {
+#include "Fuzzify.h"
+class Gas : public Fuzzify {
 private:
   int adc;
   float ro;
@@ -18,6 +18,8 @@ public:
   int getAdc();
   void logRo();
   float getPpm();
+protected:
+  float getValue() override;
 };
 
 

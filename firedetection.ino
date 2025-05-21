@@ -2,15 +2,14 @@
 #include <HTTPClient.h>
 #include "DHT.h"
 #include "WiFiClientSecure.h"
-#include "WiFiUdp.h"
 #include "Fuzzy.h"
 #include <WebSocketsServer.h>
 #include <map>
+#include <Preferences.h>
+#include <WebServer.h>
 
 #define DHTTYPE DHT22
 
-const char* ssid = ".";
-const char* wifipass = "aicomel06";
 const char* BOT_TOKEN = "";
 const char* ChannelID = "@fire_test10";
 const float VCC = 3.3;
@@ -21,10 +20,10 @@ const int fireSensor = 35;
 const int gasSensor = 34;
 const int tempSensor = 19;
 const int LED = 18;
-const int udpPort = 4210;
 
 float calibratedRo;
 bool buzzerState = false;
+bool wifiConnected = false;
 //interval buat aktif pasca kebaakaran selam 30mnt
 const unsigned long fireInterval = 1000 * 60 * 30;
 //nampung kpn terakhir kali kebakaran
@@ -36,6 +35,8 @@ const unsigned long interval = 10000;
 
 WebSocketsServer ws(80);
 DHT dht(tempSensor, DHTTYPE);
+WebServer httpServer(8000);
+Preferences pref;
 
 
 
@@ -52,7 +53,6 @@ struct FuzzyData {
 
 std::map<uint8_t, bool> clients;
 
-// ========================== FUNCTION DECLARATIONS ==========================
 
 FuzzyData getFuzzy();
 DhtData readDht();
@@ -62,14 +62,20 @@ bool getTokenFromURL(const String& url);
 void onWebSocketEvent(uint8_t fd, WStype_t type, uint8_t* payload, size_t length);
 float calibrateRo(int gasSensorPin);
 void wsTask(void* param);
+void mainTask();
+void httpServerSetup();
+void connectionChecker();
 
 
-// ============================= SETUP =======================================
 
 void setup() {
+  String storedSsid, storedPass;
+  pref.begin("wifi", true);
+  storedSsid = pref.getString("ssid", ".");
+  storedPass = pref.getString("pass", "aicomel06");
+  pref.end();
   dht.begin();
   Serial.begin(115200);
-
   WiFi.mode(WIFI_AP_STA);
   WiFi.setHostname("Esp32FireDetector");
   IPAddress local_ip(192, 168, 10, 1);
@@ -78,7 +84,7 @@ void setup() {
   WiFi.softAPConfig(local_ip, gateway, subnet);
   WiFi.softAP("fireDetector", "password123");
 
-  WiFi.begin(ssid, wifipass);
+  WiFi.begin(storedSsid.c_str(), storedPass.c_str());
 
   pinMode(fireSensor, INPUT);
   pinMode(gasSensor, INPUT_PULLDOWN);
@@ -105,17 +111,22 @@ void setup() {
   Serial.println(calibratedRo);
 
   Serial.println("Connecting to WiFi...");
+  unsigned long start = millis();
+  unsigned long waitingTime = 10000;
   while (WiFi.status() != WL_CONNECTED) {
     Serial.print(".");
+    if (start - millis() >= waitingTime) {
+      break;
+    }
     delay(1000);
   }
-
+  if (WiFi.status() == WL_CONNECTED) {
+    wifiConnected = true;
+  }
+  httpServerSetup();
   ws.begin();
   ws.onEvent(onWebSocketEvent);
   xTaskCreatePinnedToCore(wsTask, "WebSocketLoop", 8192, NULL, 1, NULL, 1);
-
-  Serial.print("Connected to WiFi. IP: ");
-  Serial.println(WiFi.localIP());
 }
 
 void wsTask(void* param) {
@@ -127,36 +138,11 @@ void wsTask(void* param) {
 
 
 void loop() {
-  FuzzyData x = getFuzzy();
-
-  Fuzzy fuzzy(x.fire, x.dht.temperature, x.gas, calibratedRo);
-  Serial.println(toString(x));
-  Serial.print("PPM : ");
-  Serial.println(fuzzy.getPpm());
-  Serial.printf("Free Heap: %u bytes\n", ESP.getFreeHeap());
-  Fuzzy def = fuzzy.defuzzification();
-  if (def.shouldWarn()) {
-    lastFire = millis();
-    buzzerState = true;
-    if (millis() - lastSended >= interval) {
-
-      lastSended = millis();
-      xTaskCreatePinnedToCore(sendToTelegram, "announcument", 4096, NULL, 1, NULL, 1);
-      ws.broadcastTXT("on");
-    } else {
-      Serial.println(millis() - lastSended);
-    }
-    Serial.println("Warning! fire detected");
-  } else {
-    buzzerState = false;
-    if (millis() - lastFire >= fireInterval) {
-      ws.broadcastTXT("off");
-    }
+  httpServer.handleClient();
+  connectionChecker();
+  if (wifiConnected) {
+    mainTask();
   }
-  Serial.println(WiFi.localIP());
-
-  digitalWrite(LED, buzzerState ? HIGH : LOW);
-  digitalWrite(BUZZER, buzzerState ? LOW : HIGH);
   delay(500);
 }
 
@@ -269,5 +255,68 @@ void onWebSocketEvent(uint8_t fd, WStype_t type, uint8_t* payload, size_t length
         }
         break;
       }
+  }
+}
+
+void mainTask() {
+  FuzzyData x = getFuzzy();
+  Fuzzy fuzzy(x.fire, x.dht.temperature, x.gas, calibratedRo);
+  Serial.println(toString(x));
+  Serial.print("PPM : ");
+  Serial.println(fuzzy.getPpm());
+  Fuzzy def = fuzzy.defuzzification();
+  if (def.shouldWarn()) {
+    lastFire = millis();
+    buzzerState = true;
+    if (millis() - lastSended >= interval) {
+
+      lastSended = millis();
+      xTaskCreatePinnedToCore(sendToTelegram, "announcument", 4096, NULL, 1, NULL, 1);
+      ws.broadcastTXT("on");
+    } else {
+      Serial.println(millis() - lastSended);
+    }
+    Serial.println("Warning! fire detected");
+  } else {
+    buzzerState = false;
+    if (millis() - lastFire >= fireInterval) {
+      ws.broadcastTXT("off");
+    }
+  }
+  digitalWrite(LED, buzzerState ? HIGH : LOW);
+  digitalWrite(BUZZER, buzzerState ? LOW : HIGH);
+}
+
+
+void httpServerSetup() {
+  httpServer.on("/", HTTP_GET, []() {
+    String html = "<h1>Connection Status : " + String(wifiConnected ? "connected" : "disconnected") + "</h1>";
+    html += "<form action='/save' method='POST'>SSID: <input name='ssid'><br>Password: <input name='pass' type='password'><br><button type='submit'>Save</button></form>";
+    httpServer.send(200, "text/html",html);
+  });
+  httpServer.on("/save", HTTP_POST, []() {
+    if (httpServer.hasArg("ssid") && httpServer.hasArg("pass")) {
+      String nssid = httpServer.arg("ssid");
+      String npass = httpServer.arg("pass");
+      pref.begin("wifi", false);
+      pref.putString("ssid", nssid);
+      pref.putString("pass", npass);
+      pref.end();
+      httpServer.send(200);
+      ESP.restart();
+
+    } else {
+      httpServer.send(400, "application/json", "{\"message\":\"missing pass or ssid\"}");
+    }
+  });
+  httpServer.begin();
+}
+
+
+void connectionChecker() {
+  if (WiFi.status() == WL_CONNECTED) {
+    wifiConnected = true;
+  } else {
+    wifiConnected = false;
   }
 }
