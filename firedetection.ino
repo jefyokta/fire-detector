@@ -146,11 +146,6 @@ void loop() {
   delay(500);
 }
 
-bool mayBeStillOnFire() {
-  return lastFire != 0 ? millis() - lastFire <= fireInterval : false;
-}
-
-
 FuzzyData getFuzzy() {
   FuzzyData data;
   data.fire = analogRead(fireSensor) * (3.3 / 4095.0);
@@ -289,7 +284,7 @@ void mainTask() {
 
 
 void httpServerSetup() {
-  httpServer.on("/", HTTP_GET, []() {
+  httpServer.on("/edit", HTTP_GET, []() {
     String html = "<h1>Connection Status : " + String(wifiConnected ? "connected" : "disconnected") + "</h1>";
     html += "<form action='/save' method='POST'>SSID: <input name='ssid'><br>Password: <input name='pass' type='password'><br><button type='submit'>Save</button></form>";
     httpServer.send(200, "text/html",html);
@@ -308,6 +303,11 @@ void httpServerSetup() {
     } else {
       httpServer.send(400, "application/json", "{\"message\":\"missing pass or ssid\"}");
     }
+  });
+  httpServer.on("/",HTTP_GET,[](){
+    String html = "<h1>ESP32 Fire Detector<h1>";
+    httpServer.send(200,"text/html",html);
+
   });
   httpServer.begin();
 }

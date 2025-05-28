@@ -8,7 +8,13 @@ private:
 
   float safe;
   float danger;
+  float getLingusFromLow(const float m, const float a, const float b) {
+    return b - m * (b - a);
+  }
 
+  float getLingusFromHigh(const float m, const float a, const float b) {
+    return m * (b - a) + a;
+  }
 public:
   Tsukamoto(float safe, float danger) {
     this->safe = safe;
@@ -24,13 +30,5 @@ public:
 
     if (denominator == 0) return 0;
     return numerator / denominator;
-  }
-
-  float getLingusFromLow(const float m, const float a, const float b) {
-    return b - m * (b - a);
-  }
-
-  float getLingusFromHigh(const float m, const float a, const float b) {
-    return m * (b - a) + a;
   }
 };

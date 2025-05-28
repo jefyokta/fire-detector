@@ -75,10 +75,12 @@ void Fuzzy::inference() {
 
   for (Rule r : rules) {
     float res = this->getMin3(r.f, r.t, r.g);
-    if (r.c == Condition::Danger) {
-      danger.push_back(res);
-    } else {
-      safe.push_back(res);
+    if (res != 0.0f) {
+      if (r.c == Condition::Danger) {
+        danger.push_back(res);
+      } else {
+        safe.push_back(res);
+      }
     }
   }
 
@@ -113,6 +115,6 @@ float Fuzzy::getPpm() {
   return this->gas.getPpm();
 }
 
-float Fuzzy::getCrispOut(){
+float Fuzzy::getCrispOut() {
   return this->crispOut;
 }
