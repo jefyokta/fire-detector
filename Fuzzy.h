@@ -22,8 +22,8 @@ struct Rule {
 class Fuzzy {
 private:
   int value;
-  float safeVal;
-  float dangerVal;
+  std::vector<float> safeVal;
+  std::vector<float> dangerVal;
   float crispOut;
   Gas gas;
   Fire fire;
