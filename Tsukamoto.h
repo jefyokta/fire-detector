@@ -21,7 +21,7 @@ private:
   }
 
 public:
-  Tsukamoto(float safe, float danger)
+  Tsukamoto(std::vector<float> safe, std::vector<float> danger)
   {
     this->safe = safe;
     this->danger = danger;
